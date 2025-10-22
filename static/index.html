@@ -429,14 +429,29 @@
             connectWebSocket();
         });
 
-        async function makeRequest(endpoint, url, loadingId, resultId) {
+        async function makeRequest(endpoint, url, loadingId, resultId, progressId) {
             const loading = document.getElementById(loadingId);
             const result = document.getElementById(resultId);
+            const progressContainer = document.getElementById(progressId);
             
             // 초기화
-            loading.classList.add('active');
             result.className = 'result';
             result.style.display = 'none';
+            
+            // 프로그레스 표시
+            if (progressContainer) {
+                progressContainer.classList.add('active');
+                const alias = progressId.replace('Progress', '');
+                const progressFill = document.getElementById(`${alias}ProgressFill`);
+                const progressInfo = document.getElementById(`${alias}ProgressInfo`);
+                if (progressFill) {
+                    progressFill.style.width = '0%';
+                    progressFill.textContent = '0%';
+                }
+                if (progressInfo) {
+                    progressInfo.textContent = '다운로드 시작 중...';
+                }
+            }
             
             try {
                 const response = await fetch(endpoint, {
@@ -477,7 +492,7 @@
                 alert('URL을 입력해주세요.');
                 return;
             }
-            makeRequest('/api/download/video', url, 'videoLoading', 'videoResult');
+            makeRequest('/api/download/video', url, 'videoLoading', 'videoResult', 'videoProgress');
         }
 
         function downloadVideoMp3() {
@@ -486,7 +501,7 @@
                 alert('URL을 입력해주세요.');
                 return;
             }
-            makeRequest('/api/download/video-mp3', url, 'videoMp3Loading', 'videoMp3Result');
+            makeRequest('/api/download/video-mp3', url, 'videoMp3Loading', 'videoMp3Result', 'videoMp3Progress');
         }
 
         function downloadChannel() {
@@ -495,7 +510,7 @@
                 alert('URL을 입력해주세요.');
                 return;
             }
-            makeRequest('/api/download/channel', url, 'channelLoading', 'channelResult');
+            makeRequest('/api/download/channel', url, 'channelLoading', 'channelResult', 'channelProgress');
         }
 
         function downloadChannelMp3() {
@@ -504,7 +519,7 @@
                 alert('URL을 입력해주세요.');
                 return;
             }
-            makeRequest('/api/download/channel-mp3', url, 'channelMp3Loading', 'channelMp3Result');
+            makeRequest('/api/download/channel-mp3', url, 'channelMp3Loading', 'channelMp3Result', 'channelMp3Progress');
         }
 
         // Enter 키 이벤트 처리

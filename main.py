@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -11,6 +11,8 @@ import logging
 import json
 import asyncio
 from typing import Set
+import threading
+import queue
 
 app = FastAPI(title="YouTube Downloader")
 
@@ -20,6 +22,8 @@ LOG_PATH = Path("logs")
 
 # WebSocket 연결 관리
 active_connections: Set[WebSocket] = set()
+# 메시지 큐
+message_queue = queue.Queue()
 
 # 로깅 설정
 def setup_logger():
@@ -92,12 +96,13 @@ def create_progress_hook(download_id: str, alias: str):
                     'percent': round(percent, 1),
                     'downloaded': downloaded,
                     'total': total,
-                    'speed': speed,
-                    'eta': eta,
+                    'speed': speed if speed else 0,
+                    'eta': eta if eta else 0,
                     'filename': d.get('filename', '')
                 }
                 
-                asyncio.create_task(broadcast_message(message))
+                # 큐에 메시지 추가
+                message_queue.put(message)
                 
             elif d['status'] == 'finished':
                 message = {
@@ -107,12 +112,31 @@ def create_progress_hook(download_id: str, alias: str):
                     'status': 'finished',
                     'filename': d.get('filename', '')
                 }
-                asyncio.create_task(broadcast_message(message))
+                
+                message_queue.put(message)
                 
         except Exception as e:
             logger.error(f"Progress hook error: {str(e)}")
     
     return progress_hook
+
+# 백그라운드에서 메시지 큐 처리
+async def process_message_queue():
+    """메시지 큐를 처리하여 WebSocket으로 전송"""
+    while True:
+        try:
+            if not message_queue.empty():
+                message = message_queue.get_nowait()
+                await broadcast_message(message)
+            await asyncio.sleep(0.1)  # 100ms마다 체크
+        except Exception as e:
+            logger.error(f"Message queue processing error: {str(e)}")
+            await asyncio.sleep(1)
+
+@app.on_event("startup")
+async def startup_event():
+    """앱 시작 시 백그라운드 작업 시작"""
+    asyncio.create_task(process_message_queue())
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
