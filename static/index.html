@@ -168,6 +168,68 @@
         .icon {
             margin-right: 8px;
         }
+
+        .progress-container {
+            margin-top: 15px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .progress-info {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .status-badge.downloading {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-badge.processing {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-badge.complete {
+            background: #d4edda;
+            color: #155724;
+        }
     </style>
 </head>
 <body>
@@ -187,6 +249,15 @@
                 <input type="text" id="videoUrl" placeholder="YouTube 영상 URL을 입력하세요" />
                 <button onclick="downloadVideo()">다운로드</button>
             </div>
+            <div class="progress-container" id="videoProgress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="videoProgressFill">0%</div>
+                </div>
+                <div class="progress-info">
+                    <span id="videoProgressInfo">준비 중...</span>
+                    <span id="videoProgressSpeed"></span>
+                </div>
+            </div>
             <div class="loading" id="videoLoading">
                 <div class="spinner"></div>
                 <p>다운로드 중...</p>
@@ -200,6 +271,15 @@
             <div class="form-group">
                 <input type="text" id="videoMp3Url" placeholder="YouTube 영상 URL을 입력하세요" />
                 <button onclick="downloadVideoMp3()">MP3 다운로드</button>
+            </div>
+            <div class="progress-container" id="videoMp3Progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="videoMp3ProgressFill">0%</div>
+                </div>
+                <div class="progress-info">
+                    <span id="videoMp3ProgressInfo">준비 중...</span>
+                    <span id="videoMp3ProgressSpeed"></span>
+                </div>
             </div>
             <div class="loading" id="videoMp3Loading">
                 <div class="spinner"></div>
@@ -215,6 +295,15 @@
                 <input type="text" id="channelUrl" placeholder="YouTube 채널 또는 재생목록 URL을 입력하세요" />
                 <button onclick="downloadChannel()">채널 다운로드</button>
             </div>
+            <div class="progress-container" id="channelProgress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="channelProgressFill">0%</div>
+                </div>
+                <div class="progress-info">
+                    <span id="channelProgressInfo">준비 중...</span>
+                    <span id="channelProgressSpeed"></span>
+                </div>
+            </div>
             <div class="loading" id="channelLoading">
                 <div class="spinner"></div>
                 <p>채널 다운로드 중... (시간이 오래 걸릴 수 있습니다)</p>
@@ -229,6 +318,15 @@
                 <input type="text" id="channelMp3Url" placeholder="YouTube 채널 또는 재생목록 URL을 입력하세요" />
                 <button onclick="downloadChannelMp3()">채널 MP3 다운로드</button>
             </div>
+            <div class="progress-container" id="channelMp3Progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="channelMp3ProgressFill">0%</div>
+                </div>
+                <div class="progress-info">
+                    <span id="channelMp3ProgressInfo">준비 중...</span>
+                    <span id="channelMp3ProgressSpeed"></span>
+                </div>
+            </div>
             <div class="loading" id="channelMp3Loading">
                 <div class="spinner"></div>
                 <p>채널 MP3 변환 중... (시간이 오래 걸릴 수 있습니다)</p>
@@ -238,6 +336,99 @@
     </div>
 
     <script>
+        // WebSocket 연결
+        let ws = null;
+        let currentDownloadId = null;
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket disconnected, reconnecting...');
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function handleWebSocketMessage(data) {
+            const alias = data.alias;
+            
+            if (data.type === 'progress') {
+                updateProgress(alias, data);
+            } else if (data.type === 'complete') {
+                hideProgress(alias);
+            } else if (data.type === 'error') {
+                hideProgress(alias);
+            }
+        }
+
+        function updateProgress(alias, data) {
+            const progressContainer = document.getElementById(`${alias}Progress`);
+            const progressFill = document.getElementById(`${alias}ProgressFill`);
+            const progressInfo = document.getElementById(`${alias}ProgressInfo`);
+            const progressSpeed = document.getElementById(`${alias}ProgressSpeed`);
+            
+            if (!progressContainer || !progressFill) return;
+            
+            progressContainer.classList.add('active');
+            
+            if (data.status === 'downloading' && data.percent) {
+                const percent = data.percent;
+                progressFill.style.width = `${percent}%`;
+                progressFill.textContent = `${percent.toFixed(1)}%`;
+                
+                const downloaded = formatBytes(data.downloaded);
+                const total = formatBytes(data.total);
+                const speed = formatBytes(data.speed) + '/s';
+                
+                progressInfo.textContent = `${downloaded} / ${total}`;
+                progressSpeed.textContent = `속도: ${speed}`;
+            } else if (data.status === 'finished') {
+                progressFill.style.width = '100%';
+                progressFill.textContent = '완료!';
+                progressInfo.textContent = '처리 중...';
+                progressSpeed.textContent = '';
+            }
+        }
+
+        function hideProgress(alias) {
+            const progressContainer = document.getElementById(`${alias}Progress`);
+            if (progressContainer) {
+                setTimeout(() => {
+                    progressContainer.classList.remove('active');
+                }, 2000);
+            }
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0 || !bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        // 페이지 로드 시 WebSocket 연결
+        window.addEventListener('load', () => {
+            connectWebSocket();
+        });
+
         async function makeRequest(endpoint, url, loadingId, resultId) {
             const loading = document.getElementById(loadingId);
             const result = document.getElementById(resultId);
