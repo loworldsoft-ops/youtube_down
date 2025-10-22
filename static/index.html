@@ -230,6 +230,49 @@
             background: #d4edda;
             color: #155724;
         }
+
+        .log-container {
+            margin-top: 15px;
+            padding: 10px;
+            background: #1e1e1e;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            color: #d4d4d4;
+            display: none;
+        }
+
+        .log-container.active {
+            display: block;
+        }
+
+        .log-entry {
+            padding: 2px 0;
+            border-left: 3px solid transparent;
+            padding-left: 8px;
+            margin-bottom: 2px;
+        }
+
+        .log-entry.info {
+            color: #4ec9b0;
+        }
+
+        .log-entry.success {
+            color: #6a9955;
+            border-left-color: #6a9955;
+        }
+
+        .log-entry.warning {
+            color: #dcdcaa;
+            border-left-color: #dcdcaa;
+        }
+
+        .log-entry.error {
+            color: #f48771;
+            border-left-color: #f48771;
+        }
     </style>
 </head>
 <body>
@@ -258,6 +301,7 @@
                     <span id="videoProgressSpeed"></span>
                 </div>
             </div>
+            <div class="log-container" id="videoLogs"></div>
             <div class="loading" id="videoLoading">
                 <div class="spinner"></div>
                 <p>다운로드 중...</p>
@@ -281,6 +325,7 @@
                     <span id="videoMp3ProgressSpeed"></span>
                 </div>
             </div>
+            <div class="log-container" id="videoMp3Logs"></div>
             <div class="loading" id="videoMp3Loading">
                 <div class="spinner"></div>
                 <p>변환 및 다운로드 중...</p>
@@ -304,6 +349,7 @@
                     <span id="channelProgressSpeed"></span>
                 </div>
             </div>
+            <div class="log-container" id="channelLogs"></div>
             <div class="loading" id="channelLoading">
                 <div class="spinner"></div>
                 <p>채널 다운로드 중... (시간이 오래 걸릴 수 있습니다)</p>
@@ -327,6 +373,7 @@
                     <span id="channelMp3ProgressSpeed"></span>
                 </div>
             </div>
+            <div class="log-container" id="channelMp3Logs"></div>
             <div class="loading" id="channelMp3Loading">
                 <div class="spinner"></div>
                 <p>채널 MP3 변환 중... (시간이 오래 걸릴 수 있습니다)</p>
@@ -370,10 +417,43 @@
             
             if (data.type === 'progress') {
                 updateProgress(alias, data);
+            } else if (data.type === 'log') {
+                addLog(alias, data.message);
             } else if (data.type === 'complete') {
                 hideProgress(alias);
             } else if (data.type === 'error') {
                 hideProgress(alias);
+                addLog(alias, `❌ Error: ${data.error}`, 'error');
+            }
+        }
+
+        function addLog(alias, message, type = 'info') {
+            const logContainer = document.getElementById(`${alias}Logs`);
+            if (!logContainer) return;
+            
+            logContainer.classList.add('active');
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            
+            // 메시지 타입에 따라 클래스 결정
+            if (message.includes('✅')) {
+                logEntry.className = 'log-entry success';
+            } else if (message.includes('⚠️')) {
+                logEntry.className = 'log-entry warning';
+            } else if (message.includes('❌')) {
+                logEntry.className = 'log-entry error';
+            }
+            
+            logEntry.textContent = message;
+            logContainer.appendChild(logEntry);
+            
+            // 자동 스크롤
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // 로그가 너무 많으면 오래된 것 삭제 (최대 100개)
+            while (logContainer.children.length > 100) {
+                logContainer.removeChild(logContainer.firstChild);
             }
         }
 
@@ -438,10 +518,17 @@
             result.className = 'result';
             result.style.display = 'none';
             
+            // 로그 컨테이너 초기화
+            const alias = progressId.replace('Progress', '');
+            const logContainer = document.getElementById(`${alias}Logs`);
+            if (logContainer) {
+                logContainer.innerHTML = '';
+                logContainer.classList.add('active');
+            }
+            
             // 프로그레스 표시
             if (progressContainer) {
                 progressContainer.classList.add('active');
-                const alias = progressId.replace('Progress', '');
                 const progressFill = document.getElementById(`${alias}ProgressFill`);
                 const progressInfo = document.getElementById(`${alias}ProgressInfo`);
                 if (progressFill) {

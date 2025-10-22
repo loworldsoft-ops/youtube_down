@@ -105,20 +105,71 @@ def create_progress_hook(download_id: str, alias: str):
                 message_queue.put(message)
                 
             elif d['status'] == 'finished':
+                filename = d.get('filename', '')
                 message = {
                     'type': 'progress',
                     'download_id': download_id,
                     'alias': alias,
                     'status': 'finished',
-                    'filename': d.get('filename', '')
+                    'filename': filename
                 }
-                
                 message_queue.put(message)
+                
+                # 완료 로그도 전송
+                log_message = {
+                    'type': 'log',
+                    'download_id': download_id,
+                    'alias': alias,
+                    'message': f"✅ Downloaded: {Path(filename).name}"
+                }
+                message_queue.put(log_message)
                 
         except Exception as e:
             logger.error(f"Progress hook error: {str(e)}")
     
     return progress_hook
+
+class CustomLogger:
+    """yt-dlp용 커스텀 로거"""
+    def __init__(self, download_id: str, alias: str):
+        self.download_id = download_id
+        self.alias = alias
+    
+    def debug(self, msg):
+        if msg.startswith('[debug] '):
+            return
+        self._send_log(msg)
+    
+    def info(self, msg):
+        self._send_log(msg)
+    
+    def warning(self, msg):
+        self._send_log(f"⚠️ {msg}")
+    
+    def error(self, msg):
+        self._send_log(f"❌ {msg}")
+    
+    def _send_log(self, msg):
+        try:
+            # 불필요한 로그 필터링
+            skip_patterns = [
+                '[download]',
+                'has already been downloaded',
+                'Sleeping',
+            ]
+            
+            if any(pattern in msg for pattern in skip_patterns):
+                return
+            
+            message = {
+                'type': 'log',
+                'download_id': self.download_id,
+                'alias': self.alias,
+                'message': msg.strip()
+            }
+            message_queue.put(message)
+        except Exception as e:
+            logger.error(f"Custom logger error: {str(e)}")
 
 # 백그라운드에서 메시지 큐 처리
 async def process_message_queue():
@@ -153,6 +204,26 @@ def get_common_ydl_opts():
         },
     }
 
+def create_logger_hook(download_id: str, alias: str):
+    """yt-dlp 로그 훅 생성"""
+    def logger_hook(d):
+        try:
+            # 로그 메시지 전송
+            if isinstance(d, dict) and 'info_dict' in d:
+                info = d['info_dict']
+                title = info.get('title', 'Unknown')
+                message = {
+                    'type': 'log',
+                    'download_id': download_id,
+                    'alias': alias,
+                    'message': f"Processing: {title}"
+                }
+                message_queue.put(message)
+        except Exception as e:
+            logger.error(f"Logger hook error: {str(e)}")
+    
+    return logger_hook
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket 연결 엔드포인트"""
@@ -177,12 +248,21 @@ async def download_video(request: VideoRequest):
         logger.info(f"[{download_id}] Starting video download: {request.url}")
         download_path = create_download_folder("video")
         
+        # 시작 메시지 전송
+        await broadcast_message({
+            'type': 'log',
+            'download_id': download_id,
+            'alias': 'video',
+            'message': f"🚀 다운로드 시작: {request.url}"
+        })
+        
         ydl_opts = {
             **get_common_ydl_opts(),
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'outtmpl': str(download_path / '%(title)s.%(ext)s'),
             'merge_output_format': 'mp4',
             'progress_hooks': [create_progress_hook(download_id, 'video')],
+            'logger': CustomLogger(download_id, 'video'),
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -227,6 +307,14 @@ async def download_video_mp3(request: VideoRequest):
         logger.info(f"[{download_id}] Starting MP3 download: {request.url}")
         download_path = create_download_folder("video_mp3")
         
+        # 시작 메시지 전송
+        await broadcast_message({
+            'type': 'log',
+            'download_id': download_id,
+            'alias': 'videoMp3',
+            'message': f"🚀 MP3 변환 시작: {request.url}"
+        })
+        
         ydl_opts = {
             **get_common_ydl_opts(),
             'format': 'bestaudio/best',
@@ -236,7 +324,8 @@ async def download_video_mp3(request: VideoRequest):
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
-            'progress_hooks': [create_progress_hook(download_id, 'video_mp3')],
+            'progress_hooks': [create_progress_hook(download_id, 'videoMp3')],
+            'logger': CustomLogger(download_id, 'videoMp3'),
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -247,7 +336,7 @@ async def download_video_mp3(request: VideoRequest):
         await broadcast_message({
             'type': 'complete',
             'download_id': download_id,
-            'alias': 'video_mp3',
+            'alias': 'videoMp3',
             'status': 'success',
             'title': info.get('title', 'Unknown')
         })
@@ -266,7 +355,7 @@ async def download_video_mp3(request: VideoRequest):
         await broadcast_message({
             'type': 'error',
             'download_id': download_id,
-            'alias': 'video_mp3',
+            'alias': 'videoMp3',
             'error': str(e)
         })
         
