@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube 다운로더</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 0.9em;
+        }
+
+        .download-section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .download-section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .form-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.3s, transform 0.1s;
+        }
+
+        button:hover {
+            background: #5568d3;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            display: block;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            display: block;
+        }
+
+        .result-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .info-box p {
+            margin: 5px 0;
+            color: #0c5c8d;
+        }
+
+        .icon {
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 YouTube 다운로더</h1>
+        <p class="subtitle">영상과 음악을 다운로드하세요</p>
+
+        <div class="info-box">
+            <p>📁 <strong>저장 경로:</strong> D:\ftp\minjung</p>
+            <p>📅 <strong>폴더 구조:</strong> 날짜_시간_다운로드방식</p>
+        </div>
+
+        <!-- 영상 다운로드 -->
+        <div class="download-section">
+            <h2>🎬 영상 다운로드 (MP4)</h2>
+            <div class="form-group">
+                <input type="text" id="videoUrl" placeholder="YouTube 영상 URL을 입력하세요" />
+                <button onclick="downloadVideo()">다운로드</button>
+            </div>
+            <div class="loading" id="videoLoading">
+                <div class="spinner"></div>
+                <p>다운로드 중...</p>
+            </div>
+            <div class="result" id="videoResult"></div>
+        </div>
+
+        <!-- 영상을 MP3로 다운로드 -->
+        <div class="download-section">
+            <h2>🎵 영상을 MP3로 다운로드</h2>
+            <div class="form-group">
+                <input type="text" id="videoMp3Url" placeholder="YouTube 영상 URL을 입력하세요" />
+                <button onclick="downloadVideoMp3()">MP3 다운로드</button>
+            </div>
+            <div class="loading" id="videoMp3Loading">
+                <div class="spinner"></div>
+                <p>변환 및 다운로드 중...</p>
+            </div>
+            <div class="result" id="videoMp3Result"></div>
+        </div>
+
+        <!-- 채널 전체 다운로드 -->
+        <div class="download-section">
+            <h2>📺 채널 전체 다운로드 (MP4)</h2>
+            <div class="form-group">
+                <input type="text" id="channelUrl" placeholder="YouTube 채널 또는 재생목록 URL을 입력하세요" />
+                <button onclick="downloadChannel()">채널 다운로드</button>
+            </div>
+            <div class="loading" id="channelLoading">
+                <div class="spinner"></div>
+                <p>채널 다운로드 중... (시간이 오래 걸릴 수 있습니다)</p>
+            </div>
+            <div class="result" id="channelResult"></div>
+        </div>
+
+        <!-- 채널을 MP3로 다운로드 -->
+        <div class="download-section">
+            <h2>🎼 채널을 MP3로 다운로드</h2>
+            <div class="form-group">
+                <input type="text" id="channelMp3Url" placeholder="YouTube 채널 또는 재생목록 URL을 입력하세요" />
+                <button onclick="downloadChannelMp3()">채널 MP3 다운로드</button>
+            </div>
+            <div class="loading" id="channelMp3Loading">
+                <div class="spinner"></div>
+                <p>채널 MP3 변환 중... (시간이 오래 걸릴 수 있습니다)</p>
+            </div>
+            <div class="result" id="channelMp3Result"></div>
+        </div>
+    </div>
+
+    <script>
+        async function makeRequest(endpoint, url, loadingId, resultId) {
+            const loading = document.getElementById(loadingId);
+            const result = document.getElementById(resultId);
+            
+            // 초기화
+            loading.classList.add('active');
+            result.className = 'result';
+            result.style.display = 'none';
+            
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    result.className = 'result success';
+                    result.innerHTML = `
+                        <div class="result-title">✅ ${data.message}</div>
+                        <p>📁 저장 경로: ${data.path}</p>
+                        ${data.filename ? `<p>📄 파일명: ${data.filename}</p>` : ''}
+                        ${data.video_count ? `<p>📊 다운로드된 파일 수: ${data.video_count}개</p>` : ''}
+                    `;
+                } else {
+                    throw new Error(data.detail || '다운로드 실패');
+                }
+            } catch (error) {
+                result.className = 'result error';
+                result.innerHTML = `
+                    <div class="result-title">❌ 오류 발생</div>
+                    <p>${error.message}</p>
+                `;
+            } finally {
+                loading.classList.remove('active');
+            }
+        }
+
+        function downloadVideo() {
+            const url = document.getElementById('videoUrl').value.trim();
+            if (!url) {
+                alert('URL을 입력해주세요.');
+                return;
+            }
+            makeRequest('/api/download/video', url, 'videoLoading', 'videoResult');
+        }
+
+        function downloadVideoMp3() {
+            const url = document.getElementById('videoMp3Url').value.trim();
+            if (!url) {
+                alert('URL을 입력해주세요.');
+                return;
+            }
+            makeRequest('/api/download/video-mp3', url, 'videoMp3Loading', 'videoMp3Result');
+        }
+
+        function downloadChannel() {
+            const url = document.getElementById('channelUrl').value.trim();
+            if (!url) {
+                alert('URL을 입력해주세요.');
+                return;
+            }
+            makeRequest('/api/download/channel', url, 'channelLoading', 'channelResult');
+        }
+
+        function downloadChannelMp3() {
+            const url = document.getElementById('channelMp3Url').value.trim();
+            if (!url) {
+                alert('URL을 입력해주세요.');
+                return;
+            }
+            makeRequest('/api/download/channel-mp3', url, 'channelMp3Loading', 'channelMp3Result');
+        }
+
+        // Enter 키 이벤트 처리
+        document.getElementById('videoUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') downloadVideo();
+        });
+        document.getElementById('videoMp3Url').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') downloadVideoMp3();
+        });
+        document.getElementById('channelUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') downloadChannel();
+        });
+        document.getElementById('channelMp3Url').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') downloadChannelMp3();
+        });
+    </script>
+</body>
+</html>
