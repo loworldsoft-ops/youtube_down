@@ -138,6 +138,21 @@ async def startup_event():
     """앱 시작 시 백그라운드 작업 시작"""
     asyncio.create_task(process_message_queue())
 
+# 공통 yt-dlp 옵션
+def get_common_ydl_opts():
+    """공통 yt-dlp 옵션 반환"""
+    return {
+        'quiet': False,
+        'no_warnings': False,
+        'extract_flat': False,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],
+                'player_skip': ['webpage', 'configs'],
+            }
+        },
+    }
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket 연결 엔드포인트"""
@@ -163,6 +178,7 @@ async def download_video(request: VideoRequest):
         download_path = create_download_folder("video")
         
         ydl_opts = {
+            **get_common_ydl_opts(),
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'outtmpl': str(download_path / '%(title)s.%(ext)s'),
             'merge_output_format': 'mp4',
@@ -212,6 +228,7 @@ async def download_video_mp3(request: VideoRequest):
         download_path = create_download_folder("video_mp3")
         
         ydl_opts = {
+            **get_common_ydl_opts(),
             'format': 'bestaudio/best',
             'outtmpl': str(download_path / '%(title)s.%(ext)s'),
             'postprocessors': [{
@@ -264,10 +281,11 @@ async def download_channel(request: ChannelRequest):
         download_path = create_download_folder("channel")
         
         ydl_opts = {
+            **get_common_ydl_opts(),
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'outtmpl': str(download_path / '%(playlist_index)s_%(title)s.%(ext)s'),
             'merge_output_format': 'mp4',
-            'ignoreerrors': True,  # 개별 비디오 오류 무시하고 계속 진행
+            'ignoreerrors': True,
             'progress_hooks': [create_progress_hook(download_id, 'channel')],
         }
         
@@ -314,6 +332,7 @@ async def download_channel_mp3(request: ChannelRequest):
         download_path = create_download_folder("channel_mp3")
         
         ydl_opts = {
+            **get_common_ydl_opts(),
             'format': 'bestaudio/best',
             'outtmpl': str(download_path / '%(playlist_index)s_%(title)s.%(ext)s'),
             'postprocessors': [{
@@ -321,7 +340,7 @@ async def download_channel_mp3(request: ChannelRequest):
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
-            'ignoreerrors': True,  # 개별 비디오 오류 무시하고 계속 진행
+            'ignoreerrors': True,
             'progress_hooks': [create_progress_hook(download_id, 'channel_mp3')],
         }
         
