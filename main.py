@@ -248,8 +248,8 @@ async def download_video(request: VideoRequest):
         logger.info(f"[{download_id}] Starting video download: {request.url}")
         download_path = create_download_folder("video")
         
-        # 시작 메시지 전송
-        await broadcast_message({
+        # 시작 메시지 큐에 추가
+        message_queue.put({
             'type': 'log',
             'download_id': download_id,
             'alias': 'video',
@@ -307,8 +307,8 @@ async def download_video_mp3(request: VideoRequest):
         logger.info(f"[{download_id}] Starting MP3 download: {request.url}")
         download_path = create_download_folder("video_mp3")
         
-        # 시작 메시지 전송
-        await broadcast_message({
+        # 시작 메시지 큐에 추가
+        message_queue.put({
             'type': 'log',
             'download_id': download_id,
             'alias': 'videoMp3',
@@ -369,6 +369,14 @@ async def download_channel(request: ChannelRequest):
         logger.info(f"[{download_id}] Starting channel download: {request.url}")
         download_path = create_download_folder("channel")
         
+        # 시작 메시지 큐에 추가
+        message_queue.put({
+            'type': 'log',
+            'download_id': download_id,
+            'alias': 'channel',
+            'message': f"🚀 채널 영상 다운로드 시작: {request.url}"
+        })
+        
         ydl_opts = {
             **get_common_ydl_opts(),
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
@@ -376,6 +384,7 @@ async def download_channel(request: ChannelRequest):
             'merge_output_format': 'mp4',
             'ignoreerrors': True,
             'progress_hooks': [create_progress_hook(download_id, 'channel')],
+            'logger': CustomLogger(download_id, 'channel'),
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -420,6 +429,14 @@ async def download_channel_mp3(request: ChannelRequest):
         logger.info(f"[{download_id}] Starting channel MP3 download: {request.url}")
         download_path = create_download_folder("channel_mp3")
         
+        # 시작 메시지 큐에 추가
+        message_queue.put({
+            'type': 'log',
+            'download_id': download_id,
+            'alias': 'channel_mp3',
+            'message': f"🚀 채널 MP3 다운로드 시작: {request.url}"
+        })
+        
         ydl_opts = {
             **get_common_ydl_opts(),
             'format': 'bestaudio/best',
@@ -431,6 +448,7 @@ async def download_channel_mp3(request: ChannelRequest):
             }],
             'ignoreerrors': True,
             'progress_hooks': [create_progress_hook(download_id, 'channel_mp3')],
+            'logger': CustomLogger(download_id, 'channel_mp3'),
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
